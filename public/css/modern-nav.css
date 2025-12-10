@@ -1,0 +1,365 @@
+/* ==========================================
+   现代化顶部导航栏样式
+   ========================================== */
+
+/* 顶部导航栏容器 */
+.modern-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border-color);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  width: 100%;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+/* Keep the homepage header pinned to the top instead of being vertically centered */
+.home-body {
+  justify-content: flex-start;
+  min-height: 100vh;
+}
+
+.top-nav {
+  width: 100%;
+  padding: 0.75rem 0;
+}
+
+.nav-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+/* 左侧头像 */
+.nav-left {
+  flex-shrink: 0;
+  position: static !important;
+  left: auto !important;
+  text-align: left;
+}
+
+.avatar-link {
+  display: block;
+  text-decoration: none;
+}
+
+.nav-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border-color);
+  transition: transform 0.3s ease, border-color 0.3s ease;
+}
+
+.nav-avatar:hover {
+  transform: scale(1.1);
+  border-color: var(--link-color);
+}
+
+.nav-avatar-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--link-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1.2rem;
+}
+
+/* 中间导航菜单 */
+.nav-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.nav-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+
+.nav-item {
+  margin: 0;
+}
+
+.nav-link {
+  color: var(--text-color);
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.nav-link:hover {
+  color: var(--link-color);
+  background: var(--hover-bg);
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 2px;
+  background: var(--link-color);
+  transition: width 0.3s ease;
+}
+
+.nav-link:hover::after {
+  width: 80%;
+}
+
+/* 右侧搜索和主题切换 */
+.nav-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* 搜索框 */
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input {
+  width: 200px;
+  padding: 0.5rem 2.5rem 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  background: var(--input-bg);
+  color: var(--text-color);
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.search-input:focus {
+  width: 250px;
+  border-color: var(--link-color);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.3s ease;
+}
+
+.search-btn:hover {
+  color: var(--link-color);
+}
+
+/* 主题切换按钮 */
+.theme-toggle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--button-bg);
+  color: var(--text-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-toggle:hover {
+  background: var(--hover-bg);
+  border-color: var(--link-color);
+  transform: rotate(180deg);
+}
+
+.sun-icon,
+.moon-icon {
+  position: absolute;
+  transition: all 0.3s ease;
+}
+
+/* 浅色模式显示太阳 */
+:root:not(.dark) .sun-icon {
+  opacity: 1;
+  transform: rotate(0deg);
+}
+
+:root:not(.dark) .moon-icon {
+  opacity: 0;
+  transform: rotate(180deg);
+}
+
+/* 深色模式显示月亮 */
+:root.dark .sun-icon {
+  opacity: 0;
+  transform: rotate(-180deg);
+}
+
+:root.dark .moon-icon {
+  opacity: 1;
+  transform: rotate(0deg);
+}
+
+/* 移动端导航 - 隐藏在桌面端 */
+.mobile-nav {
+  display: none;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  /* 隐藏桌面导航 */
+  .top-nav {
+    display: none;
+  }
+
+  /* 显示移动端导航 */
+  .mobile-nav {
+    display: block;
+    padding: 1rem;
+  }
+
+  .mobile-nav-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .mobile-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none;
+    color: var(--text-color);
+  }
+
+  .mobile-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .mobile-nickname {
+    font-weight: 600;
+    font-size: 1.1rem;
+  }
+
+  .mobile-menu-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .mobile-menu-toggle span {
+    width: 24px;
+    height: 2px;
+    background: var(--text-color);
+    transition: all 0.3s ease;
+  }
+
+  .mobile-menu-toggle.active span:nth-child(1) {
+    transform: rotate(45deg) translate(5px, 5px);
+  }
+
+  .mobile-menu-toggle.active span:nth-child(2) {
+    opacity: 0;
+  }
+
+  .mobile-menu-toggle.active span:nth-child(3) {
+    transform: rotate(-45deg) translate(7px, -6px);
+  }
+
+  .mobile-nav-menu {
+    list-style: none;
+    margin: 1rem 0 0 0;
+    padding: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+
+  .mobile-nav-menu.active {
+    max-height: 500px;
+  }
+
+  .mobile-nav-menu li {
+    margin: 0;
+  }
+
+  .mobile-nav-menu a {
+    display: block;
+    padding: 0.75rem 1rem;
+    color: var(--text-color);
+    text-decoration: none;
+    border-radius: 6px;
+    transition: background 0.3s ease;
+  }
+
+  .mobile-nav-menu a:hover {
+    background: var(--hover-bg);
+  }
+}
+
+/* CSS 变量定义 */
+:root {
+  --header-bg: rgba(255, 255, 255, 0.8);
+  --border-color: #e5e7eb;
+  --text-color: #1f2937;
+  --text-muted: #6b7280;
+  --link-color: #3b82f6;
+  --hover-bg: #f3f4f6;
+  --input-bg: #ffffff;
+  --button-bg: #ffffff;
+  --focus-ring: rgba(59, 130, 246, 0.1);
+}
+
+:root.dark {
+  --header-bg: rgba(17, 24, 39, 0.8);
+  --border-color: #374151;
+  --text-color: #f9fafb;
+  --text-muted: #9ca3af;
+  --link-color: #60a5fa;
+  --hover-bg: #1f2937;
+  --input-bg: #1f2937;
+  --button-bg: #1f2937;
+  --focus-ring: rgba(96, 165, 250, 0.1);
+}
