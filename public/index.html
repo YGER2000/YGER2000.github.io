@@ -1,232 +1,73 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <!-- 主题偏好预加载，避免页面闪烁 -->
-  <script>
-    // 在页面渲染前检查并应用用户的主题偏好
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    // 优先使用用户保存的主题，否则使用系统偏好，最后使用默认主题
-    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
-      document.documentElement.classList.add('dark');
-    } else if (savedTheme === 'light') {
-      document.documentElement.classList.remove('dark');
-    }
-  </script>
-  
-    <title>
-      
-            YGER&#39;s Blog
-    </title>
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <meta name="description" content="这是网站描述：YGER的博客">
-<meta property="og:type" content="website">
-<meta property="og:title" content="YGER&#39;s Blog">
-<meta property="og:url" content="https://yger2000.github.io/index.html">
-<meta property="og:site_name" content="YGER&#39;s Blog">
-<meta property="og:description" content="这是网站描述：YGER的博客">
-<meta property="og:locale" content="zh_CN">
-<meta property="article:author" content="YGER">
-<meta name="twitter:card" content="summary">
-      
-                
-                  <link rel="shortcut icon" href="/favicon.ico">
-                    
-                      
-<link rel="stylesheet" href="/css/typing.css">
-
-                        
-<link rel="stylesheet" href="/css/donate.css">
-
-                          
-<link rel="stylesheet" href="/css/modern-nav.css">
-
-                            
-                                  
-                                    
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.css">
-
-                                      
-<meta name="generator" content="Hexo 6.3.0"></head>
-  
-    
-    <body class="home-body dark">
-    
-  
-    <header id="header" class="modern-header">
-  <!-- 顶部导航栏 -->
-  <nav class="top-nav">
-    <div class="nav-container">
-      <!-- 左侧：头像 -->
-      <div class="nav-left">
-        <a href="/" class="avatar-link">
-          
-            <img src="/images/avatars/avatar.png" alt="YGER" class="nav-avatar">
-          
-        </a>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="一些不想忘记的念头，在时间里慢慢沉淀。">
+  <title>忧郁的日记</title>
+  <link rel="stylesheet" href="/assets/css/site.css">
+  <script defer src="/assets/js/site.js"></script>
+</head>
+<body class="home-page">
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="/">忧郁的日记</a>
+      <nav class="desktop-nav" aria-label="主导航"><a class="is-active" href="/">首页</a><a class="" href="/archive/">归档</a><a class="" href="/about/">关于</a></nav>
+      <div class="header-actions">
+        <button class="icon-button theme-toggle" type="button" aria-label="切换深浅色" title="切换深浅色"></button>
+        <button class="icon-button menu-toggle" type="button" aria-label="打开菜单" title="打开菜单"></button>
       </div>
-
-      <!-- 中间：导航菜单 -->
-      <div class="nav-center">
-        <ul class="nav-menu">
-          
-            <li class="nav-item">
-              <a class="nav-link" href="/">Home</a>
-            </li>
-          
-            <li class="nav-item">
-              <a class="nav-link" href="/archives">Archives</a>
-            </li>
-          
-        </ul>
-      </div>
-
-      <!-- 右侧：搜索和主题切换 -->
-      <div class="nav-right">
-        <!-- 搜索框 -->
-        <div class="search-box">
-          <input type="text" id="search-input" placeholder="搜索..." class="search-input">
-          <button class="search-btn" id="search-btn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"></circle>
-              <path d="m21 21-4.35-4.35"></path>
-            </svg>
-          </button>
+    </header>
+    <div class="mobile-panel" hidden>
+      <nav aria-label="移动端导航"><a class="is-active" href="/">首页</a><a class="" href="/archive/">归档</a><a class="" href="/about/">关于</a></nav>
+      <button class="icon-button theme-toggle mobile-theme" type="button" aria-label="切换深浅色" title="切换深浅色"></button>
+    </div>
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <h1>忧郁的日记</h1>
+          <p>一些不想忘记的念头，<br>在时间里慢慢沉淀。</p>
+          <span class="quiet-rule"></span>
+          <a class="text-link" href="#latest">阅读最新日记 ↓</a>
         </div>
-
-        <!-- 主题切换按钮 -->
-        <button class="theme-toggle" id="theme-toggle" aria-label="切换主题">
-          <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="5"></circle>
-            <line x1="12" y1="1" x2="12" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="23"></line>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-            <line x1="1" y1="12" x2="3" y2="12"></line>
-            <line x1="21" y1="12" x2="23" y2="12"></line>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-          </svg>
-          <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-          </svg>
-        </button>
-      </div>
+        <figure class="hero-image">
+          <img src="/assets/images/sea.svg" alt="雾海与远山">
+        </figure>
+      </section>
+      <section id="latest" class="latest-section">
+        <div class="section-heading">
+          <h2>最新日记</h2>
+          <a href="/archive/">查看全部 →</a>
+        </div>
+        <div class="post-list"><article class="post-row">
+    <time datetime="2025-12-10T11:28:53.000Z">2025/12/10</time>
+    <div>
+      <h3><a href="/posts/concert-atmosphere/">演唱会的气氛越来越淡了</a></h3>
+      <p>以前的演唱会，从下午到晚上，有很多和歌迷交流的时间。</p>
     </div>
-  </nav>
-
-  <!-- 移动端导航 -->
-  <nav class="mobile-nav">
-    <div class="mobile-nav-header">
-      <a href="/" class="mobile-logo">
-        
-          <img src="/images/avatars/avatar.png" alt="YGER" class="mobile-avatar">
-        
-        <span class="mobile-nickname">YGER</span>
-      </a>
-      <button class="mobile-menu-toggle" id="mobile-menu-toggle">
-        <span></span>
-        <span></span>
-        <span></span>
-      </button>
+    <a class="read-link" href="/posts/concert-atmosphere/">阅读全文 →</a>
+  </article><article class="post-row">
+    <time datetime="2025-12-10T08:32:34.000Z">2025/12/10</time>
+    <div>
+      <h3><a href="/posts/settle-down/">既来之则安之</a></h3>
+      <p>新工作，新房子。一开始是兴奋的，几天下来又有点失望。</p>
     </div>
-    <ul class="mobile-nav-menu" id="mobile-nav-menu">
-      
-        <li><a href="/">Home</a></li>
-      
-        <li><a href="/archives">Archives</a></li>
-      
-    </ul>
-  </nav>
-</header>
-
-    <div id="container" class="container">
-      <div class="home">
-  <div class="content">
-    <div class="profile">
-      <h1 class="nickname">YGER</h1>
-      <div class="description">
-        <p><p>软件工程师 | 探索者 | 永不止步。感受峰，感受存在。</p>
-</p>
-      </div>
+    <a class="read-link" href="/posts/settle-down/">阅读全文 →</a>
+  </article><article class="post-row">
+    <time datetime="2021-05-26T09:27:00.000Z">2021/05/26</time>
+    <div>
+      <h3><a href="/posts/草莓日记/">🍓草莓日记</a></h3>
+      <p>第一次看草莓音乐节的repo</p>
     </div>
-    <hr/>
-  </div>
-</div>
-    <ul class="footer-links">
-      
-        <li>
-	  
-	    <a href="/archives/">book</a>
-	  
-        </li>
-      
-        <li>
-	  
-	    <a target="_blank" rel="noopener" href="https://github.com/YGER2000">github-alt</a>
-	  
-        </li>
-      
-        <li>
-	  
-	    <a target="_blank" rel="noopener" href="https://twitter.com/">twitter</a>
-	  
-        </li>
-      
-        <li>
-	  
-	    <a href="/atom.xml">rss</a>
-	  
-        </li>
-      
-    </ul>
-
-    </div>
-    
-  <footer id="footer" class="home-footer footer">
-    <div id="copyright" class="copyright">
-      &copy; 2025 YGER  Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>  Theme &copy; <a href="https://github.com/geekplux" target="_blank">GeekPlux</a>
-
-      </div>
+    <a class="read-link" href="/posts/草莓日记/">阅读全文 →</a>
+  </article></div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <span>© 2026 忧郁的日记</span>
+      <span>记得生活，记得自己。</span>
+      <a class="github-link" href="https://github.com/YGER2000" aria-label="GitHub">GitHub</a>
     </footer>
-
-    
-
-    
-
-            
-
-                
-
-                        
-<script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script>
-
-                          
-<script src="https://cdn.jsdelivr.net/npm/clipboard@2/dist/clipboard.min.js"></script>
-
-
-                            
-                              
-<script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3/dist/jquery.fancybox.min.js"></script>
-
-                                
-
-                                  
-<script src="/js/typing.js"></script>
-
-                                    
-<script src="/js/modern-nav.js"></script>
-
-                                      <!--[if lt IE 9]>
-<script src="https://cdn.jsdelivr.net/npm/html5shiv@3/dist/html5shiv.min.js"></script>
-<![endif]-->
-                                      
-
-                                        
-
-                                          
-
-  </body>
+  </div>
+</body>
 </html>

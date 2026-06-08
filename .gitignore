@@ -1,0 +1,7 @@
+.hexo-server.pid
+.hexo-server.log
+.hexo-server.err.log
+.site-server.log
+.site-server.err.log
+.blog-admin.log
+.blog-admin.err.log
