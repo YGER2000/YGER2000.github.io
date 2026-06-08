@@ -5,3 +5,5 @@
 .site-server.err.log
 .blog-admin.log
 .blog-admin.err.log
+node_modules/
+.DS_Store

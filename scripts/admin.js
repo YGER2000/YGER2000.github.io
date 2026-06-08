@@ -329,7 +329,18 @@ const html = `<!doctype html>
       display: grid;
       grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
       gap: 14px;
-      align-items: stretch;
+      align-items: start;
+    }
+    .markdown-field {
+      display: grid;
+      grid-template-rows: auto minmax(560px, 62vh);
+      gap: 8px;
+      min-width: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .markdown-field-title {
+      line-height: 1.4;
     }
     .field-grid {
       display: grid;
@@ -355,16 +366,18 @@ const html = `<!doctype html>
       padding: 0 12px;
     }
     textarea {
-      min-height: 420px;
+      height: 100%;
+      min-height: 0;
       resize: vertical;
       padding: 14px;
       line-height: 1.85;
       font-family: "SFMono-Regular", "Menlo", monospace;
       font-size: 14px;
+      overflow: auto;
+      vertical-align: top;
     }
     .markdown-preview {
-      min-height: 420px;
-      max-height: 680px;
+      height: 100%;
       overflow: auto;
       padding: 22px;
       color: var(--ink);
@@ -379,6 +392,15 @@ const html = `<!doctype html>
       margin: 1.1em 0 .55em;
       line-height: 1.25;
       color: var(--ink);
+    }
+    .markdown-preview h1:first-child,
+    .markdown-preview h2:first-child,
+    .markdown-preview h3:first-child,
+    .markdown-preview p:first-child,
+    .markdown-preview blockquote:first-child,
+    .markdown-preview ul:first-child,
+    .markdown-preview ol:first-child {
+      margin-top: 0;
     }
     .markdown-preview h1 {
       font-size: 30px;
@@ -526,8 +548,8 @@ const html = `<!doctype html>
             '<button type="button" data-format="link">链接</button>' +
           '</div>' +
           '<div class="markdown-grid">' +
-            '<label>正文 Markdown<textarea data-field="body">' + escapeHtml(post.body || '') + '</textarea></label>' +
-            '<label>实时预览<div class="markdown-preview" id="markdownPreview"></div></label>' +
+            '<div class="markdown-field"><span class="markdown-field-title">正文 Markdown</span><textarea data-field="body">' + escapeHtml(post.body || '') + '</textarea></div>' +
+            '<div class="markdown-field"><span class="markdown-field-title">实时预览</span><div class="markdown-preview" id="markdownPreview"></div></div>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -545,6 +567,10 @@ const html = `<!doctype html>
         button.addEventListener('click', () => applyFormat(button.dataset.format));
       });
       updatePreview();
+      const textarea = editor.querySelector('textarea[data-field="body"]');
+      const preview = editor.querySelector('#markdownPreview');
+      if (textarea) textarea.scrollTop = 0;
+      if (preview) preview.scrollTop = 0;
     }
 
     function field(label, key, value) {
