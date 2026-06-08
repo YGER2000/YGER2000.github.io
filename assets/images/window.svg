@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 360" role="img" aria-labelledby="title desc">
+  <title id="title">窗边</title>
+  <desc id="desc">手绘风格的窗边植物。</desc>
+  <g fill="none" stroke="#1d1d1b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".72">
+    <path d="M92 52v228M96 58h178M274 58v206M96 146h178M176 58v204"/>
+    <path d="M54 288c64-22 128-26 210-15 38 5 70 4 104-5"/>
+    <path d="M236 272c5-44 11-78 18-102"/>
+    <path d="M255 169c-22 18-36 43-39 76M255 170c21 18 31 43 26 76"/>
+    <path d="M224 220c-25-18-45-23-62-17M279 218c28-17 52-20 74-9"/>
+    <path d="M222 260h66l-8 56h-48z"/>
+    <path d="M117 84c-18 17-32 37-43 62M156 83c-24 24-46 56-65 96M237 87c-24 20-43 45-57 78"/>
+  </g>
+</svg>

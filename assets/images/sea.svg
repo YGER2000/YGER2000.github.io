@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">雾海</title>
+  <desc id="desc">黑白雾海与远山。</desc>
+  <defs>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncA type="table" tableValues="0 .18"/>
+      </feComponentTransfer>
+      <feBlend mode="multiply" in2="SourceGraphic"/>
+    </filter>
+    <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#eeeeec"/>
+      <stop offset=".64" stop-color="#cfcfcb"/>
+      <stop offset="1" stop-color="#8f8f8a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="760" fill="url(#sky)"/>
+  <path d="M0 438 C155 372 220 402 330 350 C430 303 570 414 700 350 C820 291 928 370 1200 308 L1200 760 L0 760Z" fill="#555651" opacity=".4"/>
+  <path d="M0 486 C150 452 290 470 420 438 C590 398 710 446 850 412 C990 378 1050 405 1200 380 L1200 760 L0 760Z" fill="#777872" opacity=".45"/>
+  <path d="M0 548 C130 528 260 538 395 516 C570 487 725 536 920 508 C1035 492 1130 504 1200 490 L1200 760 L0 760Z" fill="#b9b9b4"/>
+  <g fill="none" stroke="#ececea" stroke-width="8" opacity=".7">
+    <path d="M0 558 C140 530 305 592 470 555 C650 515 742 590 927 554 C1040 532 1134 552 1200 536"/>
+    <path d="M0 600 C154 571 294 622 461 598 C680 566 830 624 1200 590"/>
+    <path d="M0 642 C170 611 345 660 544 636 C760 610 946 655 1200 626"/>
+  </g>
+  <g transform="translate(548 542)">
+    <ellipse cx="18" cy="118" rx="32" ry="7" fill="#282825" opacity=".22"/>
+    <path d="M15 22 C-3 31 -7 67 0 94 L35 94 C43 62 35 31 20 22Z" fill="#181817"/>
+    <circle cx="18" cy="15" r="13" fill="#151514"/>
+    <path d="M8 94 L4 130 M28 94 L34 130" stroke="#171716" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <rect width="1200" height="760" filter="url(#grain)" opacity=".55"/>
+</svg>
