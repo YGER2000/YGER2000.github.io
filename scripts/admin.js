@@ -5,8 +5,15 @@ const { execFile } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const postsDir = path.join(root, 'content', 'posts');
+const thoughtsDir = path.join(root, 'content', 'thoughts');
+const excerptsFile = path.join(root, 'content', 'excerpts.json');
+const adminAssetsDir = path.join(root, 'assets', 'admin');
 const port = Number(process.argv[2] || process.env.PORT || 4010);
 const host = process.argv[3] || process.env.HOST || '127.0.0.1';
+const contentTypes = {
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+};
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -40,6 +47,14 @@ function datePrefix(date) {
   return String(date || new Date().toISOString()).slice(0, 10);
 }
 
+function normalizeTags(value) {
+  return String(value || '')
+    .split(/[,，]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
 function toFileName(post) {
   const slug = slugify(post.slug || post.title);
   return `${datePrefix(post.date)}-${slug}.md`;
@@ -58,6 +73,7 @@ function readPosts() {
         date: meta.date || '',
         excerpt: meta.excerpt || '',
         slug: meta.slug || file.replace(/^\d{4}-\d{2}-\d{2}-/, '').replace(/\.md$/, ''),
+        tags: normalizeTags(meta.tags),
         body,
       };
     })
@@ -69,11 +85,12 @@ function serializePost(post) {
   const date = String(post.date || '').trim();
   const excerpt = String(post.excerpt || '').trim();
   const slug = slugify(post.slug || title);
+  const tags = normalizeTags(post.tags);
   const body = String(post.body || '').trim();
   if (!title) throw new Error('文章标题不能为空');
   if (!date) throw new Error(`「${title}」缺少日期`);
   if (!body) throw new Error(`「${title}」正文不能为空`);
-  return `---\ntitle: ${title}\ndate: ${date}\nexcerpt: ${excerpt}\nslug: ${slug}\n---\n\n${body}\n`;
+  return `---\ntitle: ${title}\ndate: ${date}\nexcerpt: ${excerpt}\nslug: ${slug}${tags ? `\ntags: ${tags}` : ''}\n---\n\n${body}\n`;
 }
 
 function savePosts(posts) {
@@ -92,6 +109,87 @@ function savePosts(posts) {
       existing.delete(original);
     }
   }
+  return written;
+}
+
+function readExcerpts() {
+  if (!fs.existsSync(excerptsFile)) return [];
+  const raw = fs.readFileSync(excerptsFile, 'utf8').trim();
+  if (!raw) return [];
+  const items = JSON.parse(raw);
+  if (!Array.isArray(items)) return [];
+  return items.map((item, index) => ({
+    order: Number(item.order) || index + 1,
+    text: String(item.text || ''),
+    source: String(item.source || ''),
+  })).sort((a, b) => b.order - a.order);
+}
+
+function saveExcerpts(excerpts) {
+  ensureDir(path.dirname(excerptsFile));
+  const items = (Array.isArray(excerpts) ? excerpts : [])
+    .map((item, index) => ({
+      order: Number(item.order) || index + 1,
+      text: String(item.text || ''),
+      source: String(item.source || '').trim(),
+    }))
+    .filter((item) => item.text.trim())
+    .sort((a, b) => b.order - a.order);
+  fs.writeFileSync(excerptsFile, `${JSON.stringify(items, null, 2)}\n`);
+  return items.length;
+}
+
+function readThoughts() {
+  ensureDir(thoughtsDir);
+  return fs.readdirSync(thoughtsDir)
+    .filter((file) => file.endsWith('.md'))
+    .map((file) => {
+      const raw = fs.readFileSync(path.join(thoughtsDir, file), 'utf8');
+      const [meta, body] = parseFrontMatter(raw);
+      return {
+        file,
+        date: meta.date || '',
+        body,
+      };
+    })
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+}
+
+function thoughtFileName(thought, index) {
+  if (thought.file) return path.basename(thought.file);
+  const date = datePrefix(thought.date);
+  const slug = slugify(String(thought.body || '').slice(0, 24)) || `thought-${index + 1}`;
+  return `${date}-${slug}.md`;
+}
+
+function serializeThought(thought) {
+  const date = String(thought.date || '').trim();
+  const body = String(thought.body || '').trim();
+  if (!date) throw new Error('碎念缺少时间');
+  if (!body) throw new Error('碎念正文不能为空');
+  return `---\ndate: ${date}\n---\n\n${body}\n`;
+}
+
+function saveThoughts(thoughts) {
+  ensureDir(thoughtsDir);
+  const existing = new Set(fs.readdirSync(thoughtsDir).filter((file) => file.endsWith('.md')));
+  const used = new Set();
+  const written = [];
+  for (const [index, thought] of thoughts.entries()) {
+    let file = thoughtFileName(thought, index);
+    const ext = path.extname(file);
+    const base = file.slice(0, -ext.length);
+    let suffix = 2;
+    while (used.has(file)) {
+      file = `${base}-${suffix}${ext}`;
+      suffix += 1;
+    }
+    fs.writeFileSync(path.join(thoughtsDir, file), serializeThought(thought));
+    used.add(file);
+    written.push(file);
+    existing.delete(file);
+  }
+  for (const file of existing) fs.unlinkSync(path.join(thoughtsDir, file));
   return written;
 }
 
@@ -166,16 +264,49 @@ function sendHtml(res) {
   res.end(html);
 }
 
+function sendFile(res, filePath) {
+  const ext = path.extname(filePath);
+  res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'application/octet-stream' });
+  fs.createReadStream(filePath).pipe(res);
+}
+
 async function route(req, res) {
   const url = new URL(req.url, `http://${host}:${port}`);
   try {
     if (req.method === 'GET' && url.pathname === '/') return sendHtml(res);
+    if (req.method === 'GET' && url.pathname.startsWith('/admin-assets/')) {
+      const relative = decodeURIComponent(url.pathname.replace(/^\/admin-assets\//, ''));
+      const filePath = path.resolve(adminAssetsDir, relative);
+      if (!filePath.startsWith(adminAssetsDir + path.sep)) {
+        return sendJson(res, 403, { ok: false, error: 'Forbidden' });
+      }
+      if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        return sendJson(res, 404, { ok: false, error: 'Not found' });
+      }
+      return sendFile(res, filePath);
+    }
     if (req.method === 'GET' && url.pathname === '/api/posts') {
       return sendJson(res, 200, { posts: readPosts() });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/excerpts') {
+      return sendJson(res, 200, { excerpts: readExcerpts() });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/thoughts') {
+      return sendJson(res, 200, { thoughts: readThoughts() });
     }
     if (req.method === 'POST' && url.pathname === '/api/posts') {
       const body = await readJson(req);
       const files = savePosts(Array.isArray(body.posts) ? body.posts : []);
+      return sendJson(res, 200, { ok: true, files });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/excerpts') {
+      const body = await readJson(req);
+      const count = saveExcerpts(Array.isArray(body.excerpts) ? body.excerpts : []);
+      return sendJson(res, 200, { ok: true, count });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/thoughts') {
+      const body = await readJson(req);
+      const files = saveThoughts(Array.isArray(body.thoughts) ? body.thoughts : []);
       return sendJson(res, 200, { ok: true, files });
     }
     if (req.method === 'POST' && url.pathname === '/api/build') {
@@ -199,6 +330,7 @@ const html = `<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>写作后台 - 忧郁的日记</title>
+  <link rel="stylesheet" href="/admin-assets/vendor/easymde.min.css">
   <style>
     :root {
       color-scheme: light;
@@ -254,6 +386,11 @@ const html = `<!doctype html>
       gap: 10px;
       justify-content: flex-end;
     }
+    .mode-switch {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
     button {
       min-height: 38px;
       padding: 0 16px;
@@ -267,6 +404,10 @@ const html = `<!doctype html>
       color: var(--panel);
       border-color: var(--accent);
       background: var(--accent);
+    }
+    button.is-active {
+      border-color: var(--ink);
+      background: var(--soft);
     }
     button:disabled {
       opacity: .48;
@@ -313,18 +454,6 @@ const html = `<!doctype html>
       display: grid;
       gap: 10px;
     }
-    .editor-toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-    }
-    .editor-toolbar button {
-      min-height: 32px;
-      padding: 0 12px;
-      border-radius: 6px;
-      font-size: 13px;
-    }
     .markdown-grid {
       display: grid;
       grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
@@ -333,9 +462,10 @@ const html = `<!doctype html>
     }
     .markdown-field {
       display: grid;
-      grid-template-rows: auto minmax(560px, 62vh);
+      grid-template-rows: auto minmax(0, clamp(560px, 62vh, 720px));
       gap: 8px;
       min-width: 0;
+      overflow: hidden;
       color: var(--muted);
       font-size: 13px;
     }
@@ -346,6 +476,9 @@ const html = `<!doctype html>
       display: grid;
       grid-template-columns: 1.2fr .8fr;
       gap: 14px;
+    }
+    .excerpt-fields {
+      grid-template-columns: 140px 1fr;
     }
     label {
       display: grid;
@@ -376,8 +509,54 @@ const html = `<!doctype html>
       overflow: auto;
       vertical-align: top;
     }
+    textarea.plain-textarea {
+      min-height: 260px;
+      height: auto;
+      font-family: inherit;
+      font-size: 16px;
+      line-height: 1.9;
+    }
+    .EasyMDEContainer {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+      color: var(--ink);
+    }
+    .EasyMDEContainer .CodeMirror {
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+      color: var(--ink);
+      background: rgba(255,255,255,.42);
+      border-color: var(--line);
+      border-radius: 6px;
+      font-family: "SFMono-Regular", "Menlo", monospace;
+      font-size: 14px;
+      line-height: 1.85;
+    }
+    .EasyMDEContainer .CodeMirror-scroll {
+      min-height: 0;
+    }
+    .EasyMDEContainer .editor-toolbar {
+      min-height: 46px;
+      border-color: var(--line);
+      border-radius: 6px 6px 0 0;
+      background: rgba(255,255,255,.28);
+    }
+    .EasyMDEContainer .editor-toolbar button {
+      color: var(--ink) !important;
+      border-radius: 4px;
+    }
+    .EasyMDEContainer .editor-toolbar button:hover,
+    .EasyMDEContainer .editor-toolbar button.active {
+      background: var(--soft);
+      border-color: var(--line);
+    }
     .markdown-preview {
       height: 100%;
+      min-height: 0;
       overflow: auto;
       padding: 22px;
       color: var(--ink);
@@ -412,17 +591,17 @@ const html = `<!doctype html>
       font-size: 19px;
     }
     .markdown-preview p {
-      margin: 0 0 16px;
+      margin: 0 0 30px;
     }
     .markdown-preview blockquote {
-      margin: 20px 0;
+      margin: 24px 0;
       padding-left: 18px;
       color: var(--muted);
       border-left: 3px solid var(--line);
     }
     .markdown-preview ul,
     .markdown-preview ol {
-      margin: 0 0 18px;
+      margin: 0 0 24px;
       padding-left: 1.5em;
     }
     .markdown-preview code {
@@ -473,9 +652,16 @@ const html = `<!doctype html>
       <div>
         <h1>写作后台</h1>
         <p class="subtitle">本地保存 Markdown，构建静态博客，需要时一键发布。</p>
+        <div class="mode-switch" aria-label="内容类型">
+          <button id="postsMode" class="is-active">文章</button>
+          <button id="excerptsMode">摘录</button>
+          <button id="thoughtsMode">碎念</button>
+        </div>
       </div>
       <div class="actions">
         <button id="newPost">新建文章</button>
+        <button id="newExcerpt" hidden>新建摘录</button>
+        <button id="newThought" hidden>新建碎念</button>
         <button id="saveAll" class="primary">保存全部</button>
         <button id="build">构建</button>
         <button id="publish">发布</button>
@@ -487,12 +673,33 @@ const html = `<!doctype html>
     </section>
     <pre class="status" id="status">准备好了。</pre>
   </main>
+  <script src="/admin-assets/vendor/markdown-it.min.js"></script>
+  <script src="/admin-assets/vendor/easymde.min.js"></script>
   <script>
     let posts = [];
+    let excerpts = [];
+    let thoughts = [];
     let active = 0;
+    let activeExcerpt = 0;
+    let activeThought = 0;
+    let mode = 'posts';
+    let bodyEditor = null;
     const list = document.querySelector('#postList');
     const editor = document.querySelector('#editor');
     const statusBox = document.querySelector('#status');
+    const postsModeButton = document.querySelector('#postsMode');
+    const excerptsModeButton = document.querySelector('#excerptsMode');
+    const thoughtsModeButton = document.querySelector('#thoughtsMode');
+    const newPostButton = document.querySelector('#newPost');
+    const newExcerptButton = document.querySelector('#newExcerpt');
+    const newThoughtButton = document.querySelector('#newThought');
+    const adminMarkdown = window.markdownit({
+      html: false,
+      linkify: true,
+      typographer: true,
+      breaks: true,
+    });
+    adminMarkdown.disable(['code', 'fence', 'backticks']);
 
     function today() {
       const date = new Date();
@@ -508,11 +715,87 @@ const html = `<!doctype html>
         .replace(/^-+|-+$/g, '');
     }
 
+    function normalizeMarkdownParagraphs(markdown) {
+      const lines = String(markdown || '').split(/\\r?\\n/);
+      const normalized = [];
+      let inFence = false;
+      let previousWasPlainText = false;
+
+      for (const line of lines) {
+        const trimmed = line.trimStart();
+        if (!trimmed) {
+          normalized.push('');
+          previousWasPlainText = false;
+          continue;
+        }
+
+        if (/^(\`\`\`|~~~)/.test(trimmed)) {
+          inFence = !inFence;
+          normalized.push(line);
+          previousWasPlainText = false;
+          continue;
+        }
+
+        const isBlockSyntax = /^(#{1,6}\\s|[-*+]\\s|\\d+\\.\\s|>\\s?|\`\`\`|~~~)/.test(trimmed);
+        if (!inFence && !isBlockSyntax) {
+          if (previousWasPlainText && normalized.length && normalized[normalized.length - 1].trim()) normalized.push('');
+          normalized.push(trimmed);
+          previousWasPlainText = true;
+          continue;
+        }
+
+        normalized.push(line);
+        previousWasPlainText = false;
+      }
+
+      return normalized.join('\\n');
+    }
+
+    function configureBodyEditor(editorInstance) {
+      const cm = editorInstance.codemirror;
+      cm.setOption('mode', 'text/plain');
+      cm.setOption('indentUnit', 2);
+      cm.setOption('tabSize', 2);
+      cm.setOption('indentWithTabs', false);
+      cm.setOption('extraKeys', {
+        Tab(editor) {
+          editor.replaceSelection('　　', 'end');
+        },
+      });
+    }
+
     function setStatus(text) {
       statusBox.textContent = text;
     }
 
+    function sortExcerpts() {
+      const current = excerpts[activeExcerpt];
+      excerpts.sort((a, b) => (Number(b.order) || 0) - (Number(a.order) || 0));
+      if (current) activeExcerpt = Math.max(0, excerpts.indexOf(current));
+    }
+
     function renderList() {
+      if (mode === 'excerpts') {
+        sortExcerpts();
+        list.innerHTML = excerpts.map((item, index) => '<button class="post-tab ' + (index === activeExcerpt ? 'is-active' : '') + '" data-index="' + index + '"><strong>' + escapeHtml('#' + (item.order || index + 1) + ' ' + (item.source || '未填写出处')) + '</strong><span>' + escapeHtml((item.text || '').slice(0, 34)) + '</span></button>').join('');
+        list.querySelectorAll('button').forEach((button) => {
+          button.addEventListener('click', () => {
+            activeExcerpt = Number(button.dataset.index);
+            render();
+          });
+        });
+        return;
+      }
+      if (mode === 'thoughts') {
+        list.innerHTML = thoughts.map((item, index) => '<button class="post-tab ' + (index === activeThought ? 'is-active' : '') + '" data-index="' + index + '"><strong>' + escapeHtml((item.body || '未填写碎念').slice(0, 24)) + '</strong><span>' + escapeHtml(item.date || '') + '</span></button>').join('');
+        list.querySelectorAll('button').forEach((button) => {
+          button.addEventListener('click', () => {
+            activeThought = Number(button.dataset.index);
+            render();
+          });
+        });
+        return;
+      }
       list.innerHTML = posts.map((post, index) => '<button class="post-tab ' + (index === active ? 'is-active' : '') + '" data-index="' + index + '"><strong>' + escapeHtml(post.title || '未命名文章') + '</strong><span>' + escapeHtml(post.date || '') + '</span></button>').join('');
       list.querySelectorAll('button').forEach((button) => {
         button.addEventListener('click', () => {
@@ -523,6 +806,74 @@ const html = `<!doctype html>
     }
 
     function renderEditor() {
+      if (bodyEditor) {
+        bodyEditor.toTextArea();
+        bodyEditor = null;
+      }
+      if (mode === 'excerpts') {
+        const item = excerpts[activeExcerpt];
+        if (!item) {
+          editor.innerHTML = '<div class="empty">还没有摘录，点左上角“新建摘录”。</div>';
+          return;
+        }
+        editor.innerHTML = '<div class="editor">' +
+          '<div class="field-grid excerpt-fields">' +
+            field('序号', 'order', item.order || activeExcerpt + 1) +
+            field('出自哪里', 'source', item.source || '') +
+          '</div>' +
+          '<label>摘录原文<textarea class="plain-textarea" data-field="text">' + escapeHtml(item.text || '') + '</textarea></label>' +
+        '</div>';
+        editor.querySelectorAll('[data-field]').forEach((input) => {
+          input.addEventListener('input', () => {
+            excerpts[activeExcerpt][input.dataset.field] = input.value;
+            if (input.dataset.field === 'order') sortExcerpts();
+            renderList();
+          });
+        });
+        return;
+      }
+      if (mode === 'thoughts') {
+        const item = thoughts[activeThought];
+        if (!item) {
+          editor.innerHTML = '<div class="empty">还没有碎念，点左上角“新建碎念”。</div>';
+          return;
+        }
+        editor.innerHTML = '<div class="editor">' +
+          field('时间', 'date', item.date || '') +
+          '<div class="markdown-shell">' +
+            '<div class="markdown-grid">' +
+              '<div class="markdown-field"><span class="markdown-field-title">碎念 Markdown</span><textarea id="bodyEditor" data-field="body">' + escapeHtml(item.body || '') + '</textarea></div>' +
+              '<div class="markdown-field"><span class="markdown-field-title">实时预览</span><div class="markdown-preview" id="markdownPreview"></div></div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+        editor.querySelectorAll('[data-field]').forEach((input) => {
+          input.addEventListener('input', () => {
+            thoughts[activeThought][input.dataset.field] = input.value;
+            renderList();
+          });
+        });
+        bodyEditor = new EasyMDE({
+          element: editor.querySelector('#bodyEditor'),
+          autofocus: false,
+          spellChecker: false,
+          status: false,
+          minHeight: '0',
+          renderingConfig: {
+            singleLineBreaks: true,
+          },
+          previewRender: (plainText) => adminMarkdown.render(normalizeMarkdownParagraphs(plainText)),
+          toolbar: ['bold', 'italic', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link'],
+        });
+        configureBodyEditor(bodyEditor);
+        bodyEditor.codemirror.on('change', () => {
+          thoughts[activeThought].body = bodyEditor.value();
+          updatePreview();
+          renderList();
+        });
+        updatePreview();
+        return;
+      }
       const post = posts[active];
       if (!post) {
         editor.innerHTML = '<div class="empty">还没有文章，点左上角“新建文章”。</div>';
@@ -537,18 +888,10 @@ const html = `<!doctype html>
           field('URL 标识', 'slug', post.slug || '') +
           field('摘要', 'excerpt', post.excerpt || '') +
         '</div>' +
+        field('标签（用逗号分隔）', 'tags', post.tags || '') +
         '<div class="markdown-shell">' +
-          '<div class="editor-toolbar" aria-label="Markdown 格式工具">' +
-            '<button type="button" data-format="h1">H1</button>' +
-            '<button type="button" data-format="h2">H2</button>' +
-            '<button type="button" data-format="bold">加粗</button>' +
-            '<button type="button" data-format="quote">引用</button>' +
-            '<button type="button" data-format="ordered">有序列表</button>' +
-            '<button type="button" data-format="unordered">无序列表</button>' +
-            '<button type="button" data-format="link">链接</button>' +
-          '</div>' +
           '<div class="markdown-grid">' +
-            '<div class="markdown-field"><span class="markdown-field-title">正文 Markdown</span><textarea data-field="body">' + escapeHtml(post.body || '') + '</textarea></div>' +
+            '<div class="markdown-field"><span class="markdown-field-title">正文 Markdown</span><textarea id="bodyEditor" data-field="body">' + escapeHtml(post.body || '') + '</textarea></div>' +
             '<div class="markdown-field"><span class="markdown-field-title">实时预览</span><div class="markdown-preview" id="markdownPreview"></div></div>' +
           '</div>' +
         '</div>' +
@@ -560,16 +903,39 @@ const html = `<!doctype html>
             posts[active].slug = slugify(input.value);
           }
           renderList();
-          if (input.dataset.field === 'body') updatePreview();
         });
       });
-      editor.querySelectorAll('[data-format]').forEach((button) => {
-        button.addEventListener('click', () => applyFormat(button.dataset.format));
+      bodyEditor = new EasyMDE({
+        element: editor.querySelector('#bodyEditor'),
+        autofocus: false,
+        spellChecker: false,
+        status: false,
+        minHeight: '0',
+        renderingConfig: {
+          singleLineBreaks: true,
+        },
+        previewRender: (plainText) => adminMarkdown.render(normalizeMarkdownParagraphs(plainText)),
+        toolbar: [
+          'bold',
+          'italic',
+          'heading',
+          '|',
+          'quote',
+          'unordered-list',
+          'ordered-list',
+          '|',
+          'link',
+          'image',
+        ],
+      });
+      configureBodyEditor(bodyEditor);
+      bodyEditor.codemirror.on('change', () => {
+        posts[active].body = bodyEditor.value();
+        updatePreview();
       });
       updatePreview();
-      const textarea = editor.querySelector('textarea[data-field="body"]');
       const preview = editor.querySelector('#markdownPreview');
-      if (textarea) textarea.scrollTop = 0;
+      bodyEditor.codemirror.scrollTo(0, 0);
       if (preview) preview.scrollTop = 0;
     }
 
@@ -578,6 +944,12 @@ const html = `<!doctype html>
     }
 
     function render() {
+      postsModeButton.classList.toggle('is-active', mode === 'posts');
+      excerptsModeButton.classList.toggle('is-active', mode === 'excerpts');
+      thoughtsModeButton.classList.toggle('is-active', mode === 'thoughts');
+      newPostButton.hidden = mode !== 'posts';
+      newExcerptButton.hidden = mode !== 'excerpts';
+      newThoughtButton.hidden = mode !== 'thoughts';
       renderList();
       renderEditor();
     }
@@ -591,133 +963,11 @@ const html = `<!doctype html>
         .replaceAll("'", '&#39;');
     }
 
-    function inlineMarkdown(text) {
-      return escapeHtml(text)
-        .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>')
-        .replace(/\\*([^*]+)\\*/g, '<em>$1</em>')
-        .replace(/\`([^\`]+)\`/g, '<code>$1</code>')
-        .replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-    }
-
-    function markdownToHtml(markdown) {
-      const lines = String(markdown || '').split(/\\r?\\n/);
-      const html = [];
-      let paragraph = [];
-      let listType = '';
-
-      function flushParagraph() {
-        if (!paragraph.length) return;
-        html.push('<p>' + inlineMarkdown(paragraph.join(' ')) + '</p>');
-        paragraph = [];
-      }
-
-      function closeList() {
-        if (!listType) return;
-        html.push('</' + listType + '>');
-        listType = '';
-      }
-
-      function openList(type) {
-        if (listType === type) return;
-        closeList();
-        html.push('<' + type + '>');
-        listType = type;
-      }
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) {
-          flushParagraph();
-          closeList();
-          continue;
-        }
-        const heading = trimmed.match(/^(#{1,3})\\s+(.+)$/);
-        if (heading) {
-          flushParagraph();
-          closeList();
-          const level = heading[1].length;
-          html.push('<h' + level + '>' + inlineMarkdown(heading[2]) + '</h' + level + '>');
-          continue;
-        }
-        const quote = trimmed.match(/^>\\s+(.+)$/);
-        if (quote) {
-          flushParagraph();
-          closeList();
-          html.push('<blockquote>' + inlineMarkdown(quote[1]) + '</blockquote>');
-          continue;
-        }
-        const ordered = trimmed.match(/^\\d+\\.\\s+(.+)$/);
-        if (ordered) {
-          flushParagraph();
-          openList('ol');
-          html.push('<li>' + inlineMarkdown(ordered[1]) + '</li>');
-          continue;
-        }
-        const unordered = trimmed.match(/^[-*]\\s+(.+)$/);
-        if (unordered) {
-          flushParagraph();
-          openList('ul');
-          html.push('<li>' + inlineMarkdown(unordered[1]) + '</li>');
-          continue;
-        }
-        paragraph.push(trimmed);
-      }
-
-      flushParagraph();
-      closeList();
-      return html.join('');
-    }
-
     function updatePreview() {
       const preview = document.querySelector('#markdownPreview');
-      if (!preview || !posts[active]) return;
-      preview.innerHTML = markdownToHtml(posts[active].body || '');
-    }
-
-    function selectedLineRange(textarea) {
-      const value = textarea.value;
-      const start = value.lastIndexOf('\\n', textarea.selectionStart - 1) + 1;
-      const next = value.indexOf('\\n', textarea.selectionEnd);
-      const end = next === -1 ? value.length : next;
-      return { start, end, text: value.slice(start, end) };
-    }
-
-    function replaceSelection(textarea, replacement, selectStart, selectEnd) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      textarea.value = textarea.value.slice(0, start) + replacement + textarea.value.slice(end);
-      textarea.focus();
-      textarea.setSelectionRange(start + selectStart, start + selectEnd);
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-
-    function applyLinePrefix(textarea, prefix) {
-      const range = selectedLineRange(textarea);
-      const lines = range.text.split('\\n');
-      const updated = lines.map((line) => line.startsWith(prefix) ? line : prefix + line.replace(/^#{1,3}\\s+|^>\\s+|^[-*]\\s+|^\\d+\\.\\s+/, '')).join('\\n');
-      textarea.value = textarea.value.slice(0, range.start) + updated + textarea.value.slice(range.end);
-      textarea.focus();
-      textarea.setSelectionRange(range.start, range.start + updated.length);
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-
-    function applyFormat(type) {
-      const textarea = editor.querySelector('textarea[data-field="body"]');
-      if (!textarea) return;
-      const selected = textarea.value.slice(textarea.selectionStart, textarea.selectionEnd);
-      if (type === 'h1') return applyLinePrefix(textarea, '# ');
-      if (type === 'h2') return applyLinePrefix(textarea, '## ');
-      if (type === 'quote') return applyLinePrefix(textarea, '> ');
-      if (type === 'ordered') return applyLinePrefix(textarea, '1. ');
-      if (type === 'unordered') return applyLinePrefix(textarea, '- ');
-      if (type === 'bold') {
-        const text = selected || '加粗文字';
-        return replaceSelection(textarea, '**' + text + '**', 2, 2 + text.length);
-      }
-      if (type === 'link') {
-        const text = selected || '链接文字';
-        return replaceSelection(textarea, '[' + text + '](https://)', 1, 1 + text.length);
-      }
+      if (!preview) return;
+      const markdown = bodyEditor ? bodyEditor.value() : '';
+      preview.innerHTML = adminMarkdown.render(normalizeMarkdownParagraphs(markdown));
     }
 
     async function api(path, options) {
@@ -731,31 +981,88 @@ const html = `<!doctype html>
     }
 
     async function load() {
-      const data = await api('/api/posts');
-      posts = data.posts;
+      const postsData = await api('/api/posts');
+      const excerptsData = await api('/api/excerpts');
+      const thoughtsData = await api('/api/thoughts');
+      posts = postsData.posts;
+      excerpts = excerptsData.excerpts;
+      thoughts = thoughtsData.thoughts;
       active = 0;
+      activeExcerpt = 0;
+      activeThought = 0;
       render();
     }
 
-    document.querySelector('#newPost').addEventListener('click', () => {
+    postsModeButton.addEventListener('click', () => {
+      mode = 'posts';
+      render();
+    });
+
+    excerptsModeButton.addEventListener('click', () => {
+      mode = 'excerpts';
+      sortExcerpts();
+      render();
+    });
+
+    thoughtsModeButton.addEventListener('click', () => {
+      mode = 'thoughts';
+      render();
+    });
+
+    newPostButton.addEventListener('click', () => {
       posts.unshift({
         title: '',
         date: today(),
         excerpt: '',
         slug: '',
+        tags: '',
         body: '',
       });
       active = 0;
       render();
     });
 
+    newExcerptButton.addEventListener('click', () => {
+      const nextOrder = excerpts.reduce((max, item) => Math.max(max, Number(item.order) || 0), 0) + 1;
+      excerpts.unshift({
+        order: nextOrder,
+        text: '',
+        source: '',
+      });
+      activeExcerpt = 0;
+      render();
+    });
+
+    newThoughtButton.addEventListener('click', () => {
+      thoughts.unshift({
+        date: today(),
+        body: '',
+      });
+      activeThought = 0;
+      render();
+    });
+
     document.querySelector('#saveAll').addEventListener('click', async () => {
       setStatus('保存中...');
-      const result = await api('/api/posts', {
-        method: 'POST',
-        body: JSON.stringify({ posts }),
-      });
-      setStatus('已保存：\\n' + result.files.join('\\n'));
+      if (mode === 'excerpts') {
+        const result = await api('/api/excerpts', {
+          method: 'POST',
+          body: JSON.stringify({ excerpts }),
+        });
+        setStatus('已保存 ' + result.count + ' 条摘录。');
+      } else if (mode === 'thoughts') {
+        const result = await api('/api/thoughts', {
+          method: 'POST',
+          body: JSON.stringify({ thoughts }),
+        });
+        setStatus('已保存：\\n' + result.files.join('\\n'));
+      } else {
+        const result = await api('/api/posts', {
+          method: 'POST',
+          body: JSON.stringify({ posts }),
+        });
+        setStatus('已保存：\\n' + result.files.join('\\n'));
+      }
       await load();
     });
 
@@ -770,6 +1077,8 @@ const html = `<!doctype html>
       if (!message) return;
       setStatus('发布中：保存、构建、commit、push...');
       await api('/api/posts', { method: 'POST', body: JSON.stringify({ posts }) });
+      await api('/api/excerpts', { method: 'POST', body: JSON.stringify({ excerpts }) });
+      await api('/api/thoughts', { method: 'POST', body: JSON.stringify({ thoughts }) });
       const result = await api('/api/publish', {
         method: 'POST',
         body: JSON.stringify({ message }),

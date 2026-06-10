@@ -7,5 +7,9 @@
     "server": "node scripts/serve.js public",
     "dev": "npm run build && npm run server",
     "admin": "node scripts/admin.js"
+  },
+  "dependencies": {
+    "easymde": "^2.21.0",
+    "markdown-it": "^14.2.0"
   }
 }

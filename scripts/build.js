@@ -1,9 +1,12 @@
 const fs = require('fs');
 const path = require('path');
+const MarkdownIt = require('markdown-it');
 
 const root = path.resolve(__dirname, '..');
 const contentDir = path.join(root, 'content');
 const postsDir = path.join(contentDir, 'posts');
+const thoughtsDir = path.join(contentDir, 'thoughts');
+const excerptsFile = path.join(contentDir, 'excerpts.json');
 const assetsDir = path.join(root, 'assets');
 const outDir = path.join(root, 'public');
 
@@ -13,6 +16,15 @@ const site = {
   author: 'YGER',
   url: 'https://YGER2000.github.io',
 };
+const tagFilterLimit = 10;
+
+const md = new MarkdownIt({
+  html: false,
+  linkify: true,
+  typographer: true,
+  breaks: true,
+});
+md.disable(['code', 'fence', 'backticks']);
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -22,6 +34,7 @@ function copyDir(from, to) {
   if (!fs.existsSync(from)) return;
   ensureDir(to);
   for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+    if (from === assetsDir && entry.name === 'admin') continue;
     const src = path.join(from, entry.name);
     const dest = path.join(to, entry.name);
     if (entry.isDirectory()) copyDir(src, dest);
@@ -52,87 +65,44 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-function inlineMarkdown(text) {
-  return escapeHtml(text)
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+function normalizeMarkdownParagraphs(markdown) {
+  const lines = String(markdown || '').split(/\r?\n/);
+  const normalized = [];
+  let inFence = false;
+  let previousWasPlainText = false;
+
+  for (const line of lines) {
+    const trimmed = line.trimStart();
+    if (!trimmed) {
+      normalized.push('');
+      previousWasPlainText = false;
+      continue;
+    }
+
+    if (/^(```|~~~)/.test(trimmed)) {
+      inFence = !inFence;
+      normalized.push(line);
+      previousWasPlainText = false;
+      continue;
+    }
+
+    const isBlockSyntax = /^(#{1,6}\s|[-*+]\s|\d+\.\s|>\s?|```|~~~)/.test(trimmed);
+    if (!inFence && !isBlockSyntax) {
+      if (previousWasPlainText && normalized.length && normalized[normalized.length - 1].trim()) normalized.push('');
+      normalized.push(trimmed);
+      previousWasPlainText = true;
+      continue;
+    }
+
+    normalized.push(line);
+    previousWasPlainText = false;
+  }
+
+  return normalized.join('\n');
 }
 
 function markdownToHtml(markdown) {
-  const lines = markdown.split(/\r?\n/);
-  const html = [];
-  let paragraph = [];
-  let listType = '';
-
-  function flushParagraph() {
-    if (!paragraph.length) return;
-    html.push(`<p>${inlineMarkdown(paragraph.join(' '))}</p>`);
-    paragraph = [];
-  }
-
-  function closeList() {
-    if (!listType) return;
-    html.push(`</${listType}>`);
-    listType = '';
-  }
-
-  function openList(type) {
-    if (listType === type) return;
-    closeList();
-    html.push(`<${type}>`);
-    listType = type;
-  }
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      flushParagraph();
-      closeList();
-      continue;
-    }
-    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
-    if (heading) {
-      flushParagraph();
-      closeList();
-      html.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`);
-      continue;
-    }
-    const image = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-    if (image) {
-      flushParagraph();
-      closeList();
-      html.push(`<figure><img src="${escapeHtml(image[2])}" alt="${escapeHtml(image[1])}"></figure>`);
-      continue;
-    }
-    const quote = trimmed.match(/^>\s+(.+)$/);
-    if (quote) {
-      flushParagraph();
-      closeList();
-      html.push(`<blockquote>${inlineMarkdown(quote[1])}</blockquote>`);
-      continue;
-    }
-    const ordered = trimmed.match(/^\d+\.\s+(.+)$/);
-    if (ordered) {
-      flushParagraph();
-      openList('ol');
-      html.push(`<li>${inlineMarkdown(ordered[1])}</li>`);
-      continue;
-    }
-    const unordered = trimmed.match(/^[-*]\s+(.+)$/);
-    if (unordered) {
-      flushParagraph();
-      openList('ul');
-      html.push(`<li>${inlineMarkdown(unordered[1])}</li>`);
-      continue;
-    }
-    paragraph.push(trimmed);
-  }
-
-  flushParagraph();
-  closeList();
-  return html.join('\n');
+  return md.render(normalizeMarkdownParagraphs(markdown));
 }
 
 function slugFromFile(file) {
@@ -145,6 +115,46 @@ function formatDate(date) {
     month: '2-digit',
     day: '2-digit',
   }).format(date).replaceAll('/', '/');
+}
+
+function parseTags(value) {
+  return String(value || '')
+    .split(/[,，]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function tagList(posts) {
+  const counts = new Map();
+  for (const tag of posts.flatMap((post) => post.tags)) {
+    counts.set(tag, (counts.get(tag) || 0) + 1);
+  }
+  return [...counts.keys()].sort((a, b) => {
+    const countDiff = counts.get(b) - counts.get(a);
+    return countDiff || a.localeCompare(b, 'zh-CN');
+  });
+}
+
+function tagUrl(tag) {
+  return `/archive/?tag=${encodeURIComponent(tag)}`;
+}
+
+function tagChips(tags) {
+  if (!tags.length) return '';
+  return `<div class="tag-list" aria-label="文章标签">${tags.map((tag) => `<a class="tag-chip" href="${tagUrl(tag)}" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</a>`).join('')}</div>`;
+}
+
+function tagFilter(posts) {
+  const tags = tagList(posts);
+  if (!tags.length) return '';
+  const visibleTags = tags.slice(0, tagFilterLimit);
+  const hiddenTags = tags.slice(tagFilterLimit);
+  return `<div class="tag-filter" data-tag-filter>
+    <button class="tag-chip is-active" type="button" data-tag="">全部</button>
+    ${visibleTags.map((tag) => `<button class="tag-chip" type="button" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`).join('')}
+    ${hiddenTags.map((tag) => `<button class="tag-chip" type="button" data-tag="${escapeHtml(tag)}" data-tag-extra hidden>${escapeHtml(tag)}</button>`).join('')}
+    ${hiddenTags.length ? '<button class="tag-chip tag-more" type="button" data-tag-more>更多</button>' : ''}
+  </div>`;
 }
 
 function readPosts() {
@@ -162,16 +172,37 @@ function readPosts() {
         excerpt: meta.excerpt || body.split(/\n\s*\n/)[0],
         slug,
         url: `/posts/${slug}/`,
+        tags: parseTags(meta.tags),
         html: markdownToHtml(body),
       };
     })
     .sort((a, b) => b.date - a.date);
 }
 
+function readThoughts() {
+  if (!fs.existsSync(thoughtsDir)) return [];
+  return fs.readdirSync(thoughtsDir)
+    .filter((file) => file.endsWith('.md'))
+    .map((file) => {
+      const raw = fs.readFileSync(path.join(thoughtsDir, file), 'utf8');
+      const [meta, body] = parseFrontMatter(raw);
+      const date = new Date(meta.date);
+      return {
+        date,
+        dateText: formatDate(date),
+        html: markdownToHtml(body),
+      };
+    })
+    .filter((item) => !Number.isNaN(item.date.getTime()))
+    .sort((a, b) => b.date - a.date);
+}
+
 function layout({ title, page = '', active = '', body }) {
   const nav = [
     ['首页', '/', 'home'],
-    ['归档', '/archive/', 'archive'],
+    ['札记', '/archive/', 'archive'],
+    ['摘录', '/excerpts/', 'excerpts'],
+    ['碎念', '/thoughts/', 'thoughts'],
     ['关于', '/about/', 'about'],
   ].map(([label, href, key]) => `<a class="${active === key ? 'is-active' : ''}" href="${href}">${label}</a>`).join('');
 
@@ -202,8 +233,12 @@ function layout({ title, page = '', active = '', body }) {
     ${body}
     <footer class="site-footer">
       <span>© 2026 ${site.title}</span>
-      <span>记得生活，记得自己。</span>
-      <a class="github-link" href="https://github.com/YGER2000" aria-label="GitHub">GitHub</a>
+      <span>呢喃着现实的渺茫</span>
+      <a class="social-link" href="https://weibo.com/u/5656726868" aria-label="微博主页" title="微博主页">
+        <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+          <path d="M10.098 20.323c-3.977.391-7.414-1.406-7.672-4.02-.259-2.609 2.759-5.047 6.74-5.441 3.979-.394 7.413 1.404 7.671 4.018.259 2.6-2.759 5.049-6.737 5.439l-.002.004zM9.05 17.219c-.384.616-1.208.884-1.829.602-.612-.279-.793-.991-.406-1.593.379-.595 1.176-.861 1.793-.601.622.263.82.972.442 1.592zm1.27-1.627c-.141.237-.449.353-.689.253-.236-.09-.313-.361-.177-.586.138-.227.436-.346.672-.24.239.09.315.36.18.601l.014-.028zm.176-2.719c-1.893-.493-4.033.45-4.857 2.118-.836 1.704-.026 3.591 1.886 4.21 1.983.64 4.318-.341 5.132-2.179.8-1.793-.201-3.642-2.161-4.149zm7.563-1.224c-.346-.105-.57-.18-.405-.615.375-.977.42-1.804 0-2.404-.781-1.112-2.915-1.053-5.364-.03 0 0-.766.331-.571-.271.376-1.217.315-2.224-.27-2.809-1.338-1.337-4.869.045-7.888 3.08C1.309 10.87 0 13.273 0 15.348c0 3.981 5.099 6.395 10.086 6.395 6.536 0 10.888-3.801 10.888-6.82 0-1.822-1.547-2.854-2.915-3.284v.01zm1.908-5.092c-.766-.856-1.908-1.187-2.96-.962-.436.09-.706.511-.616.932.09.42.511.691.932.602.511-.105 1.067.044 1.442.465.376.421.466.977.316 1.473-.136.406.089.856.51.992.405.119.857-.105.992-.512.33-1.021.12-2.178-.646-3.035l.03.045zm2.418-2.195c-1.576-1.757-3.905-2.419-6.054-1.968-.496.104-.812.587-.706 1.081.104.496.586.813 1.082.707 1.532-.331 3.185.15 4.296 1.383 1.112 1.246 1.429 2.943.947 4.416-.165.48.106 1.007.586 1.157.479.165.991-.104 1.157-.586.675-2.088.241-4.478-1.338-6.235l.03.045z"/>
+        </svg>
+      </a>
     </footer>
   </div>
 </body>
@@ -211,10 +246,11 @@ function layout({ title, page = '', active = '', body }) {
 }
 
 function postList(posts) {
-  return posts.map((post) => `<article class="post-row">
+  return posts.map((post) => `<article class="post-row" data-tags="${escapeHtml(post.tags.join(','))}">
     <time datetime="${post.date.toISOString()}">${post.dateText}</time>
     <div>
       <h3><a href="${post.url}">${escapeHtml(post.title)}</a></h3>
+      ${tagChips(post.tags)}
       <p>${escapeHtml(post.excerpt)}</p>
     </div>
     <a class="read-link" href="${post.url}">阅读全文 →</a>
@@ -233,7 +269,7 @@ function buildIndex(posts) {
           <h1>忧郁的日记</h1>
           <p>一些不想忘记的念头，<br>在时间里慢慢沉淀。</p>
           <span class="quiet-rule"></span>
-          <a class="text-link" href="#latest">阅读最新日记 ↓</a>
+          <a class="text-link" href="#latest">阅读最新 ↓</a>
         </div>
         <figure class="hero-image">
           <img src="/assets/images/sea.svg" alt="雾海与远山">
@@ -241,9 +277,10 @@ function buildIndex(posts) {
       </section>
       <section id="latest" class="latest-section">
         <div class="section-heading">
-          <h2>最新日记</h2>
+          <h2>最新</h2>
           <a href="/archive/">查看全部 →</a>
         </div>
+        ${tagFilter(latest)}
         <div class="post-list">${postList(latest)}</div>
       </section>
     </main>`,
@@ -261,7 +298,8 @@ function buildPost(post, posts) {
       <a class="back-link" href="/">← 返回</a>
       <article class="article">
         <h1>${escapeHtml(post.title)}</h1>
-        <p class="article-meta">${post.dateText} <span>/</span> 随笔</p>
+        <p class="article-meta">${post.dateText}</p>
+        ${tagChips(post.tags)}
         <div class="article-content">${post.html}</div>
       </article>
       <nav class="post-nav" aria-label="文章导航">
@@ -293,12 +331,14 @@ function buildArchive(posts) {
   </details>`).join('');
 
   return layout({
-    title: '归档',
+    title: '札记',
     page: 'archive-page',
     active: 'archive',
     body: `<main class="narrow-page">
-      <h1>归档</h1>
+      <h1>札记</h1>
+      ${tagFilter(posts)}
       <section class="archive-list">${groups}</section>
+      <section class="post-list archive-filter-list" hidden>${postList(posts)}</section>
     </main>`,
   });
 }
@@ -318,6 +358,62 @@ function buildAbout() {
   });
 }
 
+function readExcerpts() {
+  if (!fs.existsSync(excerptsFile)) return [];
+  const raw = fs.readFileSync(excerptsFile, 'utf8').trim();
+  if (!raw) return [];
+  const items = JSON.parse(raw);
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => ({
+      order: Number(item.order) || 0,
+      text: String(item.text || ''),
+      source: String(item.source || '').trim(),
+    }))
+    .filter((item) => item.text.trim())
+    .sort((a, b) => b.order - a.order);
+}
+
+function isPreformattedExcerpt(text) {
+  return /\n/.test(text) && (/ {2,}/.test(text) || /[\u2800-\u28ff]/.test(text));
+}
+
+function buildExcerpts(excerpts) {
+  const items = excerpts.length ? excerpts.map((item) => `<article class="excerpt-card ${isPreformattedExcerpt(item.text) ? 'is-preformatted' : ''}">
+    <span class="excerpt-order">${String(item.order).padStart(2, '0')}</span>
+    <blockquote>${escapeHtml(item.text)}</blockquote>
+    ${item.source ? `<cite>${escapeHtml(item.source)}</cite>` : ''}
+    <button class="excerpt-expand" type="button">展开</button>
+  </article>`).join('') : '<p class="empty-copy">还没有摘录。</p>';
+
+  return layout({
+    title: '摘录',
+    page: 'excerpts-page',
+    active: 'excerpts',
+    body: `<main class="excerpts-layout">
+      <h1>摘录</h1>
+      <section class="excerpt-grid">${items}</section>
+    </main>`,
+  });
+}
+
+function buildThoughts(thoughts) {
+  const items = thoughts.length ? thoughts.map((item) => `<article class="thought-row">
+    <time datetime="${item.date.toISOString()}">${item.dateText}</time>
+    <div class="thought-content">${item.html}</div>
+  </article>`).join('') : '<p class="empty-copy">还没有碎念。</p>';
+
+  return layout({
+    title: '碎念',
+    page: 'thoughts-page',
+    active: 'thoughts',
+    body: `<main class="narrow-page">
+      <h1>碎念</h1>
+      <section class="thought-list">${items}</section>
+    </main>`,
+  });
+}
+
 function writePage(filePath, html) {
   ensureDir(path.dirname(filePath));
   fs.writeFileSync(filePath, html);
@@ -330,8 +426,12 @@ function main() {
   copyDir(assetsDir, path.join(outDir, 'assets'));
 
   const posts = readPosts();
+  const excerpts = readExcerpts();
+  const thoughts = readThoughts();
   writePage(path.join(outDir, 'index.html'), buildIndex(posts));
   writePage(path.join(outDir, 'archive', 'index.html'), buildArchive(posts));
+  writePage(path.join(outDir, 'excerpts', 'index.html'), buildExcerpts(excerpts));
+  writePage(path.join(outDir, 'thoughts', 'index.html'), buildThoughts(thoughts));
   writePage(path.join(outDir, 'about', 'index.html'), buildAbout());
   for (const post of posts) {
     writePage(path.join(outDir, 'posts', post.slug, 'index.html'), buildPost(post, posts));
