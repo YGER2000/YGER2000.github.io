@@ -200,7 +200,7 @@ function readThoughts() {
 function layout({ title, page = '', active = '', body }) {
   const nav = [
     ['首页', '/', 'home'],
-    ['札记', '/archive/', 'archive'],
+    ['日记', '/archive/', 'archive'],
     ['摘录', '/excerpts/', 'excerpts'],
     ['碎念', '/thoughts/', 'thoughts'],
     ['关于', '/about/', 'about'],
@@ -280,7 +280,6 @@ function buildIndex(posts) {
           <h2>最新</h2>
           <a href="/archive/">查看全部 →</a>
         </div>
-        ${tagFilter(latest)}
         <div class="post-list">${postList(latest)}</div>
       </section>
     </main>`,
@@ -331,11 +330,11 @@ function buildArchive(posts) {
   </details>`).join('');
 
   return layout({
-    title: '札记',
+    title: '日记',
     page: 'archive-page',
     active: 'archive',
     body: `<main class="narrow-page">
-      <h1>札记</h1>
+      <h1>日记</h1>
       ${tagFilter(posts)}
       <section class="archive-list">${groups}</section>
       <section class="post-list archive-filter-list" hidden>${postList(posts)}</section>

@@ -455,6 +455,7 @@ h1 {
 .archive-month {
   display: grid;
   grid-template-columns: 90px 1fr 64px;
+  align-items: start;
   gap: 24px;
   padding: 14px 10px 24px;
   color: var(--muted);
